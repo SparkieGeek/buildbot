@@ -17,10 +17,12 @@
 from warnings import warn
 from email.Utils import formatdate
 from twisted.python import log
+from twisted.internet import defer
 from zope.interface import implements
 from buildbot.process.buildstep import LoggingBuildStep, LoggedRemoteCommand
 from buildbot.interfaces import BuildSlaveTooOldError, IRenderable
 from buildbot.status.builder import SKIPPED
+from buildbot.status.results import FAILURE
 
 class _ComputeRepositoryURL(object):
     implements(IRenderable)
@@ -74,7 +76,7 @@ class Source(LoggingBuildStep):
     branch = None # the default branch, should be set in __init__
 
     def __init__(self, workdir=None, mode='update', alwaysUseLatest=False,
-                 timeout=20*60, retry=None, **kwargs):
+                 timeout=20*60, retry=None, logEnviron=True, **kwargs):
         """
         @type  workdir: string
         @param workdir: local directory (relative to the Builder's root)
@@ -155,6 +157,13 @@ class Source(LoggingBuildStep):
                       their build failures are due to transient network
                       failures that could be handled by simply retrying a
                       couple times.
+                      
+        @type logEnviron: boolean
+        @param logEnviron: If this option is true (the default), then the
+                           step's logfile will describe the environment
+                           variables on the slave. In situations where the
+                           environment is not relevant and is long, it may
+                           be easier to set logEnviron=False.
 
         """
 
@@ -181,6 +190,8 @@ class Source(LoggingBuildStep):
 
         self.alwaysUseLatest = alwaysUseLatest
 
+        self.logEnviron = logEnviron
+        
         # Compute defaults for descriptions:
         description = ["updating"]
         descriptionDone = ["update"]
@@ -250,6 +261,8 @@ class Source(LoggingBuildStep):
 
         if self.alwaysUseLatest:
             revision = None
+            
+        self.args['logEnviron'] = self.logEnviron
         self.startVC(branch, revision, patch)
 
     def commandComplete(self, cmd):
@@ -640,7 +653,7 @@ class SVN(Source):
                  "buildbot-0.7.10 or newer." % (self.build.slavename,))
             raise BuildSlaveTooOldError(m)
 
-    def getSvnUrl(self, branch, revision, patch):
+    def getSvnUrl(self, branch):
         ''' Compute the svn url that will be passed to the svn remote command '''
         if self.svnurl:
             return self.svnurl
@@ -664,7 +677,7 @@ class SVN(Source):
 
         self.checkCompatibility()
 
-        self.args['svnurl'] = self.getSvnUrl(branch, revision, patch)
+        self.args['svnurl'] = self.getSvnUrl(branch)
         self.args['revision'] = revision
         self.args['patch'] = patch
         self.args['always_purge'] = self.always_purge
@@ -947,19 +960,24 @@ class Repo(Source):
                 res = cur_re.search(s)
         return ret
 
-    def startVC(self, branch, revision, patch):
-        self.args['manifest_url'] = self.manifest_url
-
-        # only master has access to properties, so we must implement this here.
-        downloads = []
+    def buildDownloadList(self):
+        """taken the changesource and forcebuild property,
+        build the repo download command to send to the slave
+        making this a defereable allow config to tweak this
+        in order to e.g. manage dependancies
+        """
+        try:
+            downloads = self.build.getProperty("repo_downloads")
+        except KeyError:
+            downloads = []
 
         # download patches based on GerritChangeSource events
         for change in self.build.allChanges():
             if (change.properties.has_key("event.type") and
                 change.properties["event.type"] == "patchset-created"):
                 downloads.append("%s %s/%s"% (change.properties["event.change.project"],
-                                              change.properties["event.change.number"],
-                                              change.properties["event.patchSet.number"]))
+                                                 change.properties["event.change.number"],
+                                                 change.properties["event.patchSet.number"]))
 
         # download patches based on web site forced build properties:
         # "repo_d", "repo_d0", .., "repo_d9"
@@ -975,13 +993,27 @@ class Repo(Source):
         if downloads:
             self.args["repo_downloads"] = downloads
             self.setProperty("repo_downloads", downloads)
+        return defer.succeed(None)
 
+    def startVC(self, branch, revision, patch):
+        self.args['manifest_url'] = self.manifest_url
+
+        # only master has access to properties, so we must implement this here.
+        d = self.buildDownloadList()
+        d.addCallback(self.continueStartVC, branch, revision, patch)
+        d.addErrback(self.failedStartVC)
+
+    def continueStartVC(self, ignored, branch, revision, patch):
         slavever = self.slaveVersion("repo")
         if not slavever:
             raise BuildSlaveTooOldError("slave is too old, does not know "
                                         "about repo")
         cmd = LoggedRemoteCommand("repo", self.args)
         self.startCommand(cmd)
+
+    def failedStartVC(self, failure):
+        self.interrupt("unable to build download list"+str(failure))
+        self.finished(FAILURE)
 
     def commandComplete(self, cmd):
         if cmd.updates.has_key("repo_downloaded"):

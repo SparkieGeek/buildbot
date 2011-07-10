@@ -4,6 +4,13 @@ Major User visible changes in Buildbot.             -*- outline -*-
 
 
 * Next Version
+
+** Customizable validation regexps
+
+The global c['validation'] parameter can be used to adjust the regular
+expressions used to validate branches, revisions, and properties input by the
+user.
+
 ** Logging for SVNPoller cleaned up
 
 All logging for SVNPoller now starts with "SVNPoller: ". Previously it was
@@ -14,6 +21,11 @@ mixed case and not uniform.
 Source steps have been rewritten to have a simpler, more consistent
 configuration, and to run on the master instead of the slave, allowing much
 more control over their behavior.  So far, Mercurial is complete.
+
+** Source steps have logEnviron parameter
+
+Similar to shell commands, a logEnviron parameter is now supported for Source
+steps.
 
 ** Interested users for Try
 
@@ -26,6 +38,12 @@ This command no longer copies the configuration to a temporary directory.  This
 change allows more complex configurations to be tested with checkconfig.
 
 * Buildbot 0.8.4 (June 12, 2011)
+
+** Buildmaster Metrics
+
+The buildmaster now actively measures a number of quantities that can be useful
+in debugging and tuning its performance.  See the documentation for more
+information.
 
 ** Monotone support
 

@@ -54,7 +54,9 @@ class RemoveDirectory(base.Command):
     the following keys:
 
         - ['dir'] (required): subdirectory which the command will create,
-                                  relative to the builder dir
+                              relative to the builder dir. This argument
+                              can be either a single directory name as a string
+                              or list of directory names as a list.
 
         - ['timeout']:  seconds of silence tolerated before we kill off the
                         command
@@ -67,16 +69,40 @@ class RemoveDirectory(base.Command):
     """
 
     header = "rmdir"
+    
+    def setup(self,args):
+        self.logEnviron = args.get('logEnviron',True)
 
+
+    @defer.deferredGenerator
     def start(self):
         args = self.args
         # args['dir'] is relative to Builder directory, and is required.
         assert args['dir'] is not None
-        dirname = args['dir']
+        dirnames = args['dir']
 
         self.timeout = args.get('timeout', 120)
         self.maxTime = args.get('maxTime', None)
+        self.rc = 0
+        if type(dirnames) is list:
+            assert len(dirnames) != 0
+            for dirname in dirnames:
+                wfd = defer.waitForDeferred(self.removeSingleDir(dirname))
+                yield wfd
+                res = wfd.getResult()
+                # Even if single removal of single file/dir consider it as
+                # failure of whole command, but continue removing other files
+                # Send 'rc' to master to handle failure cases
+                if res != 0:
+                    self.rc = res
+        else:
+            wfd = defer.waitForDeferred(self.removeSingleDir(dirnames))
+            yield wfd
+            self.rc = wfd.getResult()
 
+        self.sendStatus({'rc': self.rc})
+
+    def removeSingleDir(self, dirname):
         # TODO: remove the old tree in the background
         self.dir = os.path.join(self.builder.basedir, dirname)
         if runtime.platformType != "posix":
@@ -87,15 +113,13 @@ class RemoveDirectory(base.Command):
         else:
             d = self._clobber(None)
 
-        # always add the RC, regardless of platform
-        d.addCallbacks(self._sendRC, self._checkAbandoned)
         return d
 
     def _clobber(self, dummy, chmodDone = False):
         command = ["rm", "-rf", self.dir]
         c = runprocess.RunProcess(self.builder, command, self.builder.basedir,
                          sendRC=0, timeout=self.timeout, maxTime=self.maxTime,
-                         usePTY=False)
+                         logEnviron=self.logEnviron, usePTY=False)
 
         self.command = c
         # sendRC=0 means the rm command will send stdout/stderr to the
@@ -105,9 +129,7 @@ class RemoveDirectory(base.Command):
         # The rm -rf may fail if there is a left-over subdir with chmod 000
         # permissions. So if we get a failure, we attempt to chmod suitable
         # permissions and re-try the rm -rf.
-        if chmodDone:
-            d.addCallback(self._abandonOnFailure)
-        else:
+        if not chmodDone:
             d.addCallback(self._tryChmod)
         return d
 
@@ -126,11 +148,10 @@ class RemoveDirectory(base.Command):
                                 '-exec', 'chmod', 'u+rwx', '{}', ';' ]
         c = runprocess.RunProcess(self.builder, command, self.builder.basedir,
                          sendRC=0, timeout=self.timeout, maxTime=self.maxTime,
-                         usePTY=False)
+                         logEnviron=self.logEnviron, usePTY=False)
 
         self.command = c
         d = c.start()
-        d.addCallback(self._abandonOnFailure)
         d.addCallback(lambda dummy: self._clobber(dummy, True))
         return d
 
@@ -155,6 +176,9 @@ class CopyDirectory(base.Command):
 
     header = "rmdir"
 
+    def setup(self,args):
+        self.logEnviron = args.get('logEnviron',True)
+        
     def start(self):
         args = self.args
         # args['todir'] is relative to Builder directory, and is required.
@@ -185,7 +209,7 @@ class CopyDirectory(base.Command):
             command = ['cp', '-R', '-P', '-p', fromdir, todir]
             c = runprocess.RunProcess(self.builder, command, self.builder.basedir,
                              sendRC=False, timeout=self.timeout, maxTime=self.maxTime,
-                             usePTY=False)
+                             logEnviron=self.logEnviron, usePTY=False)
             self.command = c
             d = c.start()
             d.addCallback(self._abandonOnFailure)
