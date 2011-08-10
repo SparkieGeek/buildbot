@@ -91,6 +91,11 @@
       
       {% if authz.needAuthForm('stopBuild') %}
         {{ auth() }}
+      {% else %}
+      <div class="row">
+        <span class="label">Your name:</span>
+        <input type="text" name="username"/>
+      </div>
       {% endif %}
       
       {% if not short %}
