@@ -65,7 +65,7 @@
 
 {% macro stop_build(stop_url, authz, on_all=False, on_selected=False, builders=[], short=False, label="Build") %}
   {% if not short or not authz.needAuthForm('stopBuild') %}
-    <form method="post" name="stop_build" action="{{ stop_url }}" class='command stopbuild'
+    <form method="post" name="stop_build" action="{{ stop_url }}" class="command stopbuild"
                {{ 'style="display:inline"' if short else '' }}>
       {% if not short %}
         {% if on_all %}
@@ -92,20 +92,10 @@
       {% if authz.needAuthForm('stopBuild') %}
         {{ auth() }}
       {% else %}
-      <div class="row">
-        <span class="label">Your name:</span>
-        <input type="text" name="username"/>
-      </div>
+        <input type="text" name="username" value="Your name"/>
+        <input type="text" name="comments" value="Reasons"/>
+        <input type="submit" value="Stop {{ label }}" />
       {% endif %}
-      
-      {% if not short %}
-        <div class="row">
-          <span class="label">Reason:</span>
-          <input type="text" name="comments"/>
-        </div>
-      {% endif %}
-  
-      <input type="submit" value="Stop {{ label }}" />
     </form>
   {% endif %}
 {% endmacro %}
@@ -258,6 +248,11 @@
   
   {% if authz.needAuthForm('forceBuild') %}
     {{ auth() }}
+  {% else %}
+  <div class="row"
+     <span class="label">Your name:</span>
+     <input type="text" name="username"/>
+  </div>
   {% endif %}
    <div class="row">
      <span class="label">Reason for re-running build:</span>
