@@ -348,9 +348,14 @@ are available to all steps.
     builder.
 
 .. _Source-Checkout:
-    
+
 Source Checkout
 ~~~~~~~~~~~~~~~
+
+.. caution:: New source checkout steps are recently developed
+    and not stable yet. If you find any bugs please report them
+    `here <http://trac.buildbot.net/newticket>`_. Old source steps
+    are :ref:`Source-Checkout-Old`.
 
 .. py:module:: buildbot.steps.source
 
@@ -908,6 +913,64 @@ heckout or update. It takes the following arguments:
     This maintains a ``source`` directory for source, which it updates copies to
     the build directory.  This allows Buildbot to start with a fresh directory,
     without downloading the entire repository on every build.
+
+.. _Step-Bzr:
+
+.. index::
+   Bzr
+   Build Steps; Bzr
+
+Bzr
++++
+
+.. py:class:: buildbot.steps.source.bzr.Bzr
+
+bzr is a descendant of Arch/Baz, and is frequently referred to
+as simply `Bazaar`. The repository-vs-workspace model is similar to
+Darcs, but it uses a strictly linear sequence of revisions (one
+history per branch) like Arch. Branches are put in subdirectories.
+This makes it look very much like Mercurial. It takes the following
+arguments:
+
+``repourl``
+    (required unless ``baseURL`` is provided): the URL at which the
+    Bzr source repository is available.
+
+``baseURL``
+    (required unless ``repourl`` is provided): the base repository URL,
+    to which a branch name will be appended. It should probably end in a
+    slash.
+
+``defaultBranch``
+    (allowed if and only if ``baseURL`` is provided): this specifies
+    the name of the branch to use when a Build does not provide one of its
+    own. This will be appended to ``baseURL`` to create the string that
+    will be passed to the ``bzr checkout`` command.
+
+``mode``
+``method``
+
+    No method is needed for incremental mode.  For full mode, ``method`` can
+    take the values shown below. If no value is given, it defaults to
+    ``fresh``.
+
+``clobber``
+    This specifies to remove the ``workdir`` and make a full checkout.
+
+``fresh``
+    This method first runs ``bzr clean-tree`` to remove all the unversioned
+    files then ``update`` the repo. This remove all unversioned files
+    including those in .bzrignore.
+
+``clean``
+    This is same as fresh except that it doesn't remove the files mentioned
+    in .bzrginore i.e, by running ``bzr clean-tree --ignore``.
+
+``copy``
+    A local bzr repository is maintained and the repo is copied to ``build``
+    directory for each build. Before each build the local bzr repo is
+    updated then copied to ``build`` for next steps.
+
 
 .. _Source-Checkout-Old:
 
@@ -1684,7 +1747,7 @@ correctly unless you add 'call' before your batch file's name:
     All ShellCommands are run by default in the ``workdir``, which
     defaults to the :file:`build` subdirectory of the slave builder's
     base directory. The absolute path of the workdir will thus be the
-    slave's basedir (set as an option to ``buildbot create-slave``,
+    slave's basedir (set as an option to ``buildslave create-slave``,
     :ref:`Creating-a-buildslave`) plus the builder's basedir (set in the
     builder's ``c['builddir']`` key in :file:`master.cfg`) plus the workdir
     itself (a class-level attribute of the BuildFactory, defaults to

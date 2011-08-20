@@ -378,7 +378,7 @@ port. To do this, just pass in the TCP port number when you create the
 :class:`WebStatus` instance; this is called the ``http_port`` argument::
 
     from buildbot.status.html import WebStatus
-    c['status'].append(http_port=WebStatus(http_port=8080))
+    c['status'].append(WebStatus(http_port=8080))
 
 The ``http_port`` argument is actually a `strports specification` for the
 port that the web server should listen on. This can be a simple port number, or
@@ -447,7 +447,7 @@ This is all configured with the :class:`Authz` class::
     authz = Authz(
         forceBuild=True,
         stopBuild=True)
-    c['status'].append(http_port=WebStatus(http_port=8080, authz=authz))
+    c['status'].append(WebStatus(http_port=8080, authz=authz))
 
 Each of the actions listed above is an option to :class:`Authz`.  You can specify
 ``False`` (the default) to prohibit that action or ``True`` to enable it.
@@ -875,7 +875,7 @@ MailNotifier arguments
     ``failing``
         Only send mail about builds which fail
 
-    ``warning``
+    ``warnings``
         Only send mail about builds which fail or generate warnings
 
     ``passing``
@@ -937,8 +937,14 @@ MailNotifier arguments
     (implementor of :class:`IEmailLookup`). Object which provides
     :class:`IEmailLookup`, which is responsible for mapping User names (which come
     from the VC system) into valid email addresses. If not provided, the
-    notifier will only be able to send mail to the addresses in the
-    extraRecipients list. Most of the time you can use a simple Domain
+    ``MailNotifier`` will attempt to build the ``sendToInterestedUsers``
+    from the authors of the Changes that led to the Build via :ref:`User-Objects`.
+    If the author of one of the Build's Changes has an email address stored,
+    it will added to the recipients list. With this method, ``owners`` are still
+    added to the recipients.
+
+    In either case, ``MailNotifier`` will also send mail to addresses in
+    the extraRecipients list. Most of the time you can use a simple Domain
     instance. As a shortcut, you can pass as string: this will be treated
     as if you had provided ``Domain(str)``. For example,
     ``lookup='twistedmatrix.com'`` will allow mail to be sent to all

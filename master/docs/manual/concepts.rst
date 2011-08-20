@@ -670,12 +670,38 @@ Change came from.
 ``svn``
     ``who`` attributes are of the form ``Username``.
 
+``hg``
+    ``who`` attributes are free-form strings, but usually adhere to similar
+    conventions as ``git`` attributes (``Full Name <Email>``).
+
+``cvs``
+    ``who`` attributes are of the form ``Username``.
+
+``darcs``
+    ``who`` attributes contain an ``Email`` and may also include a ``Full Name``
+    like ``git`` attributes.
+
+``bzr``
+    ``who`` attributes are free-form strings like ``hg``, and can include a
+    ``Username``, ``Email``, and/or ``Full Name``.
+
+Tools
++++++
+
+For managing users manually, use the ``buildbot user`` command, which allows
+you to add, remove, update, and show various attributes of users in the Buildbot
+database (see :ref:`Command-line-Tool`).
+
 Uses
 ++++
 
 Correlating the various bits and pieces that Buildbot views as users also means
 that one attribute of a user can be translated into another. This provides a
 more complete view of users throughout Buildbot.
+
+One such use is being able to find email addresses based on a set of Builds
+to notify users through the ``MailNotifier``. This process is explained
+more clearly in :ref:``Email-Addresses``.
 
 .. _Doing-Things-With-Users:
 
@@ -726,6 +752,14 @@ configurable when the notifier is created. To create more complex behaviors
 (perhaps using an LDAP lookup, or using ``finger`` on a central host to
 determine a preferred address for the developer), provide a different object
 as the ``lookup`` argument.
+
+If an EmailLookup object isn't given to the MailNotifier, the MailNotifier
+will try to find emails through :ref:`User-Objects`. This will work the
+same as if an EmailLookup object was used if every user in the Build's
+Interested Users list has an email in the database for them. If a user
+whose change led to a Build doesn't have an email attribute, that user
+will not receive an email. If ``extraRecipients`` is given, those users
+are still sent mail when the EmailLookup object is not specified.
 
 In the future, when the Problem mechanism has been set up, the Buildbot
 will need to send mail to arbitrary Users. It will do this by locating a

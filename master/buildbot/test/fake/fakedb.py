@@ -302,8 +302,6 @@ class User(Row):
     defaults = dict(
         uid = None,
         identifier = 'soap',
-        full_name = None,
-        email = None,
     )
 
     id_column = 'uid'
@@ -314,7 +312,7 @@ class UserInfo(Row):
     defaults = dict(
         uid = None,
         attr_type = 'git',
-        attr_data = 'Tyler Durden <tyler@mayhem.net>'
+        attr_data = 'Tyler Durden <tyler@mayhem.net>',
     )
 
     required_columns = ( 'uid', )
@@ -1033,26 +1031,24 @@ class FakeUsersComponent(FakeDBComponent):
         for row in rows:
             if isinstance(row, User):
                 self.users[row.uid] = dict(identifier=row.identifier)
-                if 'full_name' in row:
-                    self.users[row.uid].update(full_name=row.full_name)
-                if 'email' in row:
-                    self.users[row.uid].update(email=row.email)
 
             if isinstance(row, UserInfo):
                 assert row.uid in self.users
-                if not self.users_info[row.uid]:
-                    self.users_info[row.uid] = dict(attr_type=row.attr_type,
-                                                    attr_data=row.attr_data)
+                if row.uid not in self.users_info:
+                    self.users_info[row.uid] = [dict(attr_type=row.attr_type,
+                                                     attr_data=row.attr_data)]
                 else:
-                    self.users_info[row.uid].update(
-                                               dict(attr_type=row.attr_type,
-                                                    attr_data=row.attr_data))
+                    self.users_info[row.uid].append(
+                                                dict(attr_type=row.attr_type,
+                                                     attr_data=row.attr_data))
 
     def _user2dict(self, uid):
         usdict = None
         if uid in self.users:
-            usdict.update(self.users[uid])
-            usdict.update(self.users_info[uid])
+            usdict = self.users[uid]
+            infos = self.users_info[uid]
+            for attr in infos:
+                usdict[attr['attr_type']] = attr['attr_data']
             usdict['uid'] = uid
         return usdict
 
@@ -1065,19 +1061,20 @@ class FakeUsersComponent(FakeDBComponent):
     def addUser(self, identifier, attr_type, attr_data):
         for uid in self.users_info:
             attrs = self.users_info[uid]
-            if (attr_type == attrs['attr_type'] and
-                attr_data == attrs['attr_data']):
-                return defer.succeed(uid)
+            for attr in attrs:
+                if (attr_type == attr['attr_type'] and
+                    attr_data == attr['attr_data']):
+                    return defer.succeed(uid)
 
         uid = self.nextId()
-        self.db.users.insertTestData([User(uid=uid, identifier=identifier)])
-        self.db.users_info.insertTestData([UserInfo(uid=uid,
-                                                    attr_type=attr_type,
-                                                    attr_data=attr_data)])
+        self.db.insertTestData([User(uid=uid, identifier=identifier)])
+        self.db.insertTestData([UserInfo(uid=uid,
+                                         attr_type=attr_type,
+                                         attr_data=attr_data)])
         return defer.succeed(uid)
 
     def getUser(self, uid):
-        usdict = {}
+        usdict = None
         if uid in self.users:
             usdict = self._user2dict(uid)
         return defer.succeed(usdict)
@@ -1091,14 +1088,26 @@ class FakeUsersComponent(FakeDBComponent):
 
         if attr_type is not None:
             assert attr_data is not None
-            self.users_info[uid].update(dict(attr_type=attr_type,
-                                             attr_data=attr_data))
+            infos = self.users_info[uid]
+            for attr in infos:
+                if attr_type == attr['attr_type']:
+                    attr['attr_data'] = attr_data
+                    break
+            else:
+                infos.append(dict(attr_type=attr_type,
+                                  attr_data=attr_data))
         return defer.succeed(None)
 
     def removeUser(self, uid):
         if uid in self.users:
             self.users.pop(uid)
             self.users_info.pop(uid)
+        return defer.succeed(None)
+
+    def identifierToUid(self, identifier):
+        for uid in self.users:
+            if identifier == self.users[uid]['identifier']:
+                return defer.succeed(uid)
         return defer.succeed(None)
 
 class FakeDBConnector(object):

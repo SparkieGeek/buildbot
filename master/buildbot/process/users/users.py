@@ -16,7 +16,7 @@
 from twisted.python import log
 from twisted.internet import defer
 
-accepted_sources = ['git', 'svn']
+srcs = ['git', 'svn', 'hg', 'cvs', 'darcs', 'bzr']
 
 @defer.deferredGenerator
 def createUserObject(master, author, src=None):
@@ -39,7 +39,7 @@ def createUserObject(master, author, src=None):
         log.msg("No vcs information found, unable to create User Object")
         return
 
-    if src in accepted_sources:
+    if src in srcs:
         log.msg("checking for User Object from %s Change for: %s" % (src,
                                                                      author))
         usdict = dict(identifier=author, attr_type=src, attr_data=author)
@@ -55,3 +55,25 @@ def createUserObject(master, author, src=None):
     uid = wfd.getResult()
 
     yield uid
+
+def getUserContact(master, contact_type=None, uid=None):
+    """
+    This is a simple getter function that returns a user attribute
+    that matches the contact_type argument, or returns None if no
+    uid/match is found.
+
+    @param master: BuildMaster used to query the database
+    @type master: BuildMaster instance
+
+    @param contact_type: type of contact attribute to look for in
+                         in a given user, such as 'email' or 'nick'
+    @type contact_type: string
+
+    @param uid: user that is searched for the contact_type match
+    @type uid: integer
+
+    @returns: string of contact information or None via deferred
+    """
+    d = master.db.users.getUser(uid)
+    d.addCallback(lambda usdict: usdict and usdict.get(contact_type))
+    return d
